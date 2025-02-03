@@ -33,8 +33,8 @@ def fix_json(json_path, image_dir):
         data = json.load(f)
     json_dir = os.path.dirname(json_path)
     image_files = [f for f in os.listdir(image_dir) if f.endswith(".png")]
-    
-    pattern = re.compile(r"_(\d{4})\.png$")
+
+    pattern = re.compile(r"_(\d+)\.png$")
     max_suffix = 0
     for img in image_files:
         match = pattern.search(img)
@@ -43,13 +43,28 @@ def fix_json(json_path, image_dir):
 
     suffix_to_remove = f"{max_suffix:04d}.png" if max_suffix > 0 else ""
 
+    expected_frames = len(image_files)
+    while len(data["frames"]) > expected_frames:
+        data["frames"].pop(0)
+
     # Process frames
     updated_frames = []
     for frame in data["frames"]:
         file_path = frame["file_path"]
 
         # Remove "_000{frame_idx}.png" from file path
-        corrected_file_name = file_path.replace(suffix_to_remove, "") if suffix_to_remove else file_path
+        corrected_file_name = (
+            file_path.replace(suffix_to_remove, "") if suffix_to_remove else file_path
+        )
+
+        # Extract the frame number and decrement it by 1
+        number_pattern = re.search(r"frame_(\d+)", corrected_file_name)
+        if number_pattern:
+            frame_number = int(number_pattern.group(1)) - 1
+            corrected_file_name = re.sub(
+                r"frame_(\d+)", f"frame_{frame_number:04d}", corrected_file_name
+            )
+
         frame["file_path"] = corrected_file_name
 
         # Generate corresponding depth and normal file names
@@ -58,7 +73,9 @@ def fix_json(json_path, image_dir):
         normal_file = f"{base_name}_normals.exr"
 
         # Check if these files exist
-        if os.path.exists(depth_file) and os.path.exists(normal_file):
+        depth_path = os.path.join(image_dir, depth_file)
+        normal_path = os.path.join(image_dir, normal_file)
+        if os.path.exists(depth_path) and os.path.exists(normal_path):
             frame["depth_file_path"] = depth_file
             frame["normal_file_path"] = normal_file
 
@@ -68,12 +85,11 @@ def fix_json(json_path, image_dir):
     data["frames"] = updated_frames
 
     # Save the updated JSON
-    output_path = os.path.join(json_dir, "fixed_transforms_train.json")
+    output_path = os.path.join(json_dir, "transforms_train.json")
     with open(output_path, "w") as f:
         json.dump(data, f, indent=4)
 
     print(f"Updated JSON saved to {output_path}")
-
 
 def set_camera_pose(camera, pose_matrix):
     """Set the camera's location and rotation based on an SE(3) pose matrix."""
@@ -150,12 +166,6 @@ class CameraOnSphere(blender_nerf_operator.BlenderNeRF_Operator):
         scene.init_frame_end = scene.frame_end
         scene.init_active_camera = camera
 
-        if scene.test_data:
-            # testing transforms
-            output_data["frames"] = self.get_camera_extrinsics(
-                scene, camera, mode="TEST", method="COS"
-            )
-            self.save_json(output_path, "transforms_test.json", output_data)
 
         if scene.train_data:
             if not scene.show_camera:
@@ -248,6 +258,14 @@ class CameraOnSphere(blender_nerf_operator.BlenderNeRF_Operator):
                     print("writing to", file_output_node.file_slots[0].path)
             self.save_json(output_path, "transforms_train.json", sphere_output_data)
 
+            if scene.test_data:
+                # testing transforms
+                output_data["frames"] = self.get_camera_extrinsics(
+                    scene, camera, mode="TEST", method="COS"
+                )
+                self.save_json(output_path, "transforms_test.json", output_data)
+                
+            
             fix_file_structure(os.path.join(output_path, "train"))
             fix_json(os.path.join(output_path, "transforms_train.json"), os.path.join(output_path, "train"))
 
