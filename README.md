@@ -1,3 +1,7 @@
+(Onur) Changes:
+Add the depth and normal map to be rendered by default. This causes a buggy behaviour where N-1 frames get rendered, but the .json accounts for this. 
+Added `view_output.py` which requires additional packages to visualize the output.
+
 # BlenderNeRF
 
 Whether a VFX artist, a research fellow or a graphics amateur, **BlenderNeRF** is the easiest and fastest way to create synthetic NeRF and Gaussian Splatting datasets within Blender. Obtain renders and camera parameters with a single click, while having full user control over the 3D scene and camera!
